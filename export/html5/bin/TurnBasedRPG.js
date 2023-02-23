@@ -915,7 +915,7 @@ ApplicationMain.main = function() {
 ApplicationMain.create = function(config) {
 	var app = new openfl_display_Application();
 	ManifestResources.init(config);
-	app.meta.h["build"] = "1";
+	app.meta.h["build"] = "2";
 	app.meta.h["company"] = "HaxeFlixel";
 	app.meta.h["file"] = "TurnBasedRPG";
 	app.meta.h["name"] = "TurnBasedRPG";
@@ -2700,7 +2700,16 @@ openfl_display_DisplayObject.prototype = $extend(openfl_events_EventDispatcher.p
 	}
 	,set_filters: function(value) {
 		if(value != null && value.length > 0) {
-			this.__filters = value;
+			var clonedFilters = [];
+			var _g = 0;
+			while(_g < value.length) {
+				var filter = value[_g];
+				++_g;
+				var clonedFilter = filter.clone();
+				clonedFilter.__renderDirty = true;
+				clonedFilters.push(clonedFilter);
+			}
+			this.__filters = clonedFilters;
 			if(!this.__renderDirty) {
 				this.__renderDirty = true;
 				this.__setParentRenderDirty();
@@ -3976,6 +3985,9 @@ ManifestResources.init = function(config) {
 	ManifestResources.rootPath = null;
 	if(config != null && Object.prototype.hasOwnProperty.call(config,"rootPath")) {
 		ManifestResources.rootPath = Reflect.field(config,"rootPath");
+		if(!StringTools.endsWith(ManifestResources.rootPath,"/")) {
+			ManifestResources.rootPath += "/";
+		}
 	}
 	if(ManifestResources.rootPath == null) {
 		ManifestResources.rootPath = "./";
@@ -4245,6 +4257,9 @@ openfl_text_Font.fromBytes = function(bytes) {
 	return font;
 };
 openfl_text_Font.fromFile = function(path) {
+	if(path == null) {
+		return null;
+	}
 	var font = new openfl_text_Font();
 	font.__fromFile(path);
 	return font;
@@ -8378,12 +8393,58 @@ var Player = function(x,y) {
 	}
 	flixel_FlxSprite.call(this,x,y);
 	this.makeGraphic(16,16,-16776961);
+	this.drag.set_x(this.drag.set_y(800));
 };
 $hxClasses["Player"] = Player;
 Player.__name__ = "Player";
 Player.__super__ = flixel_FlxSprite;
 Player.prototype = $extend(flixel_FlxSprite.prototype,{
-	__class__: Player
+	updateMovement: function() {
+		var up = false;
+		var down = false;
+		var left = false;
+		var right = false;
+		up = flixel_FlxG.keys.checkKeyArrayState([38,87],1);
+		down = flixel_FlxG.keys.checkKeyArrayState([40,83],1);
+		left = flixel_FlxG.keys.checkKeyArrayState([37,65],1);
+		right = flixel_FlxG.keys.checkKeyArrayState([39,68],1);
+		if(up && down) {
+			down = false;
+			up = down;
+		}
+		if(left && right) {
+			right = false;
+			left = right;
+		}
+		if(up || down || left || right) {
+			var newAngle = 0;
+			if(up) {
+				newAngle = -90;
+				if(left) {
+					newAngle -= 45;
+				} else if(right) {
+					newAngle += 45;
+				}
+			} else if(down) {
+				newAngle = 90;
+				if(left) {
+					newAngle += 45;
+				} else if(right) {
+					newAngle -= 45;
+				}
+			} else if(left) {
+				newAngle = 180;
+			} else if(right) {
+				newAngle = 0;
+			}
+			flixel_math_FlxPoint.setPolarRadians(this.velocity,100,newAngle * (Math.PI / 180));
+		}
+	}
+	,update: function(elapsed) {
+		this.updateMovement();
+		flixel_FlxSprite.prototype.update.call(this,elapsed);
+	}
+	,__class__: Player
 });
 var Reflect = function() { };
 $hxClasses["Reflect"] = Reflect;
@@ -12060,22 +12121,22 @@ flixel_FlxCamera.prototype = $extend(flixel_FlxBasic.prototype,{
 		return this.height - this.viewMarginY * 2;
 	}
 	,get_viewX: function() {
-		return this.get_camera().scroll.x + this.viewMarginX;
+		return this.scroll.x + this.viewMarginX;
 	}
 	,get_viewY: function() {
-		return this.get_camera().scroll.y + this.viewMarginY;
+		return this.scroll.y + this.viewMarginY;
 	}
 	,get_viewLeft: function() {
-		return this.get_camera().scroll.x + this.viewMarginX;
+		return this.scroll.x + this.viewMarginX;
 	}
 	,get_viewTop: function() {
-		return this.get_camera().scroll.y + this.viewMarginY;
+		return this.scroll.y + this.viewMarginY;
 	}
 	,get_viewRight: function() {
-		return this.get_camera().scroll.x + (this.width - this.viewMarginX);
+		return this.scroll.x + (this.width - this.viewMarginX);
 	}
 	,get_viewBottom: function() {
-		return this.get_camera().scroll.x + (this.height - this.viewMarginY);
+		return this.scroll.x + (this.height - this.viewMarginY);
 	}
 	,get_viewOffsetX: function() {
 		return this.viewMarginX;
@@ -22457,16 +22518,17 @@ openfl_display_Shader.prototype = {
 		gl.shaderSource(shader,source);
 		gl.compileShader(shader);
 		var shaderInfoLog = gl.getShaderInfoLog(shader);
+		var hasInfoLog = shaderInfoLog != null && StringTools.trim(shaderInfoLog) != "";
 		var compileStatus = gl.getShaderParameter(shader,gl.COMPILE_STATUS);
-		if(shaderInfoLog != null || compileStatus == 0) {
+		if(hasInfoLog || compileStatus == 0) {
 			var message = compileStatus == 0 ? "Error" : "Info";
 			message += type == gl.VERTEX_SHADER ? " compiling vertex shader" : " compiling fragment shader";
 			message += "\n" + shaderInfoLog;
 			message += "\n" + source;
 			if(compileStatus == 0) {
-				lime_utils_Log.error(message,{ fileName : "openfl/display/Shader.hx", lineNumber : 334, className : "openfl.display.Shader", methodName : "__createGLShader"});
-			} else if(shaderInfoLog != null) {
-				lime_utils_Log.debug(message,{ fileName : "openfl/display/Shader.hx", lineNumber : 335, className : "openfl.display.Shader", methodName : "__createGLShader"});
+				lime_utils_Log.error(message,{ fileName : "openfl/display/Shader.hx", lineNumber : 335, className : "openfl.display.Shader", methodName : "__createGLShader"});
+			} else if(hasInfoLog) {
+				lime_utils_Log.debug(message,{ fileName : "openfl/display/Shader.hx", lineNumber : 336, className : "openfl.display.Shader", methodName : "__createGLShader"});
 			}
 		}
 		return shader;
@@ -22492,7 +22554,7 @@ openfl_display_Shader.prototype = {
 		if(gl.getProgramParameter(program,gl.LINK_STATUS) == 0) {
 			var message = "Unable to initialize the shader program";
 			message += "\n" + gl.getProgramInfoLog(program);
-			lime_utils_Log.error(message,{ fileName : "openfl/display/Shader.hx", lineNumber : 368, className : "openfl.display.Shader", methodName : "__createGLProgram"});
+			lime_utils_Log.error(message,{ fileName : "openfl/display/Shader.hx", lineNumber : 369, className : "openfl.display.Shader", methodName : "__createGLProgram"});
 		}
 		return program;
 	}
@@ -25109,7 +25171,11 @@ flixel_input_gamepad_FlxGamepad.prototype = {
 		return this.checkButtonArrayStateRaw(RawIDArray,-1);
 	}
 	,firstPressedID: function() {
-		return this.mapping.getID(this.firstPressedRawID());
+		var id = this.firstPressedRawID();
+		if(id < 0) {
+			return id;
+		}
+		return this.mapping.getID(id);
 	}
 	,firstPressedRawID: function() {
 		var _g = 0;
@@ -25117,14 +25183,18 @@ flixel_input_gamepad_FlxGamepad.prototype = {
 		while(_g < _g1.length) {
 			var button = _g1[_g];
 			++_g;
-			if(button != null && (button.current == 0 || button.current == -1)) {
+			if(button != null && (button.current == 1 || button.current == 2)) {
 				return button.ID;
 			}
 		}
 		return -1;
 	}
 	,firstJustPressedID: function() {
-		return this.mapping.getID(this.firstJustPressedRawID());
+		var id = this.firstJustPressedRawID();
+		if(id < 0) {
+			return id;
+		}
+		return this.mapping.getID(id);
 	}
 	,firstJustPressedRawID: function() {
 		var _g = 0;
@@ -25139,7 +25209,11 @@ flixel_input_gamepad_FlxGamepad.prototype = {
 		return -1;
 	}
 	,firstJustReleasedID: function() {
-		return this.mapping.getID(this.firstJustReleasedRawID());
+		var id = this.firstJustReleasedRawID();
+		if(id < 0) {
+			return id;
+		}
+		return this.mapping.getID(id);
 	}
 	,firstJustReleasedRawID: function() {
 		var _g = 0;
@@ -39674,8 +39748,7 @@ flixel_system_debug_Window.prototype = $extend(openfl_display_Sprite.prototype,{
 			tmp = false;
 		}
 		if(tmp) {
-			flixel_FlxG.save.data.windowSettings[this._id] = this.get_visible();
-			flixel_FlxG.save.flush();
+			this.saveWindowVisibility();
 		}
 		if(this.toggleButton != null) {
 			this.toggleButton.set_toggled(!this.get_visible());
@@ -39704,18 +39777,28 @@ flixel_system_debug_Window.prototype = $extend(openfl_display_Sprite.prototype,{
 			return;
 		}
 		if(flixel_FlxG.save.data.windowSettings == null) {
-			var maxWindows = 10;
-			var _g = [];
-			var _g1 = 0;
-			var _g2 = maxWindows;
-			while(_g1 < _g2) {
-				var _ = _g1++;
-				_g.push(true);
-			}
-			flixel_FlxG.save.data.windowSettings = _g;
+			this.initWindowsSave();
 			flixel_FlxG.save.flush();
 		}
 		this.set_visible(flixel_FlxG.save.data.windowSettings[this._id]);
+	}
+	,initWindowsSave: function() {
+		var maxWindows = 10;
+		var _g = [];
+		var _g1 = 0;
+		var _g2 = maxWindows;
+		while(_g1 < _g2) {
+			var _ = _g1++;
+			_g.push(true);
+		}
+		flixel_FlxG.save.data.windowSettings = _g;
+	}
+	,saveWindowVisibility: function() {
+		if(flixel_FlxG.save.data.windowSettings == null) {
+			this.initWindowsSave();
+		}
+		flixel_FlxG.save.data.windowSettings[this._id] = this.get_visible();
+		flixel_FlxG.save.flush();
 	}
 	,update: function() {
 	}
@@ -52352,21 +52435,21 @@ flixel_util_FlxSpriteUtil.cameraWrap = function(sprite,camera,edges) {
 	point._inPool = false;
 	var offset = point;
 	var dir = 1;
-	if((edges & dir) == dir && spriteBounds.x + spriteBounds.width < camera.get_camera().scroll.x + camera.viewMarginX) {
-		sprite.set_x(camera.get_camera().scroll.x + (camera.width - camera.viewMarginX) + offset.x);
+	if((edges & dir) == dir && spriteBounds.x + spriteBounds.width < camera.scroll.x + camera.viewMarginX) {
+		sprite.set_x(camera.scroll.x + (camera.width - camera.viewMarginX) + offset.x);
 	} else {
 		var dir = 16;
-		if((edges & dir) == dir && spriteBounds.x > camera.get_camera().scroll.x + (camera.width - camera.viewMarginX)) {
-			sprite.set_x(camera.get_camera().scroll.x + camera.viewMarginX + offset.x - spriteBounds.width);
+		if((edges & dir) == dir && spriteBounds.x > camera.scroll.x + (camera.width - camera.viewMarginX)) {
+			sprite.set_x(camera.scroll.x + camera.viewMarginX + offset.x - spriteBounds.width);
 		}
 	}
 	var dir = 256;
-	if((edges & dir) == dir && spriteBounds.y + spriteBounds.height < camera.get_camera().scroll.y + camera.viewMarginY) {
-		sprite.set_y(camera.get_camera().scroll.x + (camera.height - camera.viewMarginY) + offset.y);
+	if((edges & dir) == dir && spriteBounds.y + spriteBounds.height < camera.scroll.y + camera.viewMarginY) {
+		sprite.set_y(camera.scroll.x + (camera.height - camera.viewMarginY) + offset.y);
 	} else {
 		var dir = 4096;
-		if((edges & dir) == dir && spriteBounds.y > camera.get_camera().scroll.x + (camera.height - camera.viewMarginY)) {
-			sprite.set_y(camera.get_camera().scroll.y + camera.viewMarginY + offset.y - spriteBounds.height);
+		if((edges & dir) == dir && spriteBounds.y > camera.scroll.x + (camera.height - camera.viewMarginY)) {
+			sprite.set_y(camera.scroll.y + camera.viewMarginY + offset.y - spriteBounds.height);
 		}
 	}
 	if(!spriteBounds._inPool) {
@@ -52405,21 +52488,21 @@ flixel_util_FlxSpriteUtil.cameraBound = function(sprite,camera,edges) {
 	point._inPool = false;
 	var offset = point;
 	var dir = 1;
-	if((edges & dir) == dir && spriteBounds.x < camera.get_camera().scroll.x + camera.viewMarginX) {
-		sprite.set_x(camera.get_camera().scroll.x + camera.viewMarginX + offset.x);
+	if((edges & dir) == dir && spriteBounds.x < camera.scroll.x + camera.viewMarginX) {
+		sprite.set_x(camera.scroll.x + camera.viewMarginX + offset.x);
 	} else {
 		var dir = 16;
-		if((edges & dir) == dir && spriteBounds.x + spriteBounds.width > camera.get_camera().scroll.x + (camera.width - camera.viewMarginX)) {
-			sprite.set_x(camera.get_camera().scroll.x + (camera.width - camera.viewMarginX) + offset.x - spriteBounds.width);
+		if((edges & dir) == dir && spriteBounds.x + spriteBounds.width > camera.scroll.x + (camera.width - camera.viewMarginX)) {
+			sprite.set_x(camera.scroll.x + (camera.width - camera.viewMarginX) + offset.x - spriteBounds.width);
 		}
 	}
 	var dir = 256;
-	if((edges & dir) == dir && spriteBounds.y < camera.get_camera().scroll.y + camera.viewMarginY) {
-		sprite.set_y(camera.get_camera().scroll.y + camera.viewMarginY + offset.y);
+	if((edges & dir) == dir && spriteBounds.y < camera.scroll.y + camera.viewMarginY) {
+		sprite.set_y(camera.scroll.y + camera.viewMarginY + offset.y);
 	} else {
 		var dir = 4096;
-		if((edges & dir) == dir && spriteBounds.y + spriteBounds.height > camera.get_camera().scroll.x + (camera.height - camera.viewMarginY)) {
-			sprite.set_y(camera.get_camera().scroll.x + (camera.height - camera.viewMarginY) + offset.y - spriteBounds.height);
+		if((edges & dir) == dir && spriteBounds.y + spriteBounds.height > camera.scroll.x + (camera.height - camera.viewMarginY)) {
+			sprite.set_y(camera.scroll.x + (camera.height - camera.viewMarginY) + offset.y - spriteBounds.height);
 		}
 	}
 	if(!spriteBounds._inPool) {
@@ -60157,7 +60240,7 @@ lime__$internal_backend_html5_HTML5AudioSource.prototype = {
 		this.position.y = value.y;
 		this.position.z = value.z;
 		this.position.w = value.w;
-		if(this.parent.buffer.__srcHowl != null && this.parent.buffer.__srcHowl.pos != null) {
+		if(this.parent.buffer != null && this.parent.buffer.__srcHowl != null && this.parent.buffer.__srcHowl.pos != null) {
 			this.parent.buffer.__srcHowl.pos(this.position.x,this.position.y,this.position.z,this.id);
 		}
 		return this.position;
@@ -60543,7 +60626,7 @@ lime__$internal_backend_html5_HTML5HTTPRequest.prototype = {
 	,__class__: lime__$internal_backend_html5_HTML5HTTPRequest
 };
 var lime__$internal_backend_html5_HTML5Window = function(parent) {
-	this.inputing = false;
+	this.imeCompositionActive = false;
 	this.unusedTouchesPool = new haxe_ds_List();
 	this.scale = 1.0;
 	this.currentTouches = new haxe_ds_IntMap();
@@ -60673,6 +60756,7 @@ lime__$internal_backend_html5_HTML5Window.prototype = {
 	,textInputEnabled: null
 	,textInputRect: null
 	,unusedTouchesPool: null
+	,__focusPending: null
 	,alert: function(message,title) {
 		if(message != null) {
 			window.alert(Std.string(message));
@@ -60741,6 +60825,19 @@ lime__$internal_backend_html5_HTML5Window.prototype = {
 		this.parent.context = context;
 	}
 	,focus: function() {
+	}
+	,focusTextInput: function() {
+		var _gthis = this;
+		if(this.__focusPending) {
+			return;
+		}
+		this.__focusPending = true;
+		haxe_Timer.delay(function() {
+			_gthis.__focusPending = false;
+			if(_gthis.textInputEnabled) {
+				lime__$internal_backend_html5_HTML5Window.textInput.focus();
+			}
+		},20);
 	}
 	,getCursor: function() {
 		return this.cursor;
@@ -60823,14 +60920,9 @@ lime__$internal_backend_html5_HTML5Window.prototype = {
 		return true;
 	}
 	,handleFocusEvent: function(event) {
-		var _gthis = this;
 		if(this.textInputEnabled) {
 			if(event.relatedTarget == null || this.isDescendent(event.relatedTarget)) {
-				haxe_Timer.delay(function() {
-					if(_gthis.textInputEnabled) {
-						lime__$internal_backend_html5_HTML5Window.textInput.focus();
-					}
-				},20);
+				this.focusTextInput();
 			}
 		}
 	}
@@ -60874,7 +60966,7 @@ lime__$internal_backend_html5_HTML5Window.prototype = {
 		}
 	}
 	,handleInputEvent: function(event) {
-		if(this.inputing) {
+		if(this.imeCompositionActive) {
 			return;
 		}
 		if(lime__$internal_backend_html5_HTML5Window.textInput.value != lime__$internal_backend_html5_HTML5Window.dummyCharacter) {
@@ -61153,6 +61245,9 @@ lime__$internal_backend_html5_HTML5Window.prototype = {
 		if(window.document.queryCommandEnabled("copy")) {
 			window.document.execCommand("copy");
 		}
+		if(this.textInputEnabled) {
+			this.focusTextInput();
+		}
 	}
 	,setCursor: function(value) {
 		if(this.cursor != value) {
@@ -61284,7 +61379,7 @@ lime__$internal_backend_html5_HTML5Window.prototype = {
 		if(value) {
 			if(lime__$internal_backend_html5_HTML5Window.textInput == null) {
 				lime__$internal_backend_html5_HTML5Window.textInput = window.document.createElement("input");
-				lime__$internal_backend_html5_HTML5Window.textInput.type = "text";
+				lime__$internal_backend_html5_HTML5Window.textInput.type = "password";
 				lime__$internal_backend_html5_HTML5Window.textInput.style.position = "absolute";
 				lime__$internal_backend_html5_HTML5Window.textInput.style.opacity = "0";
 				lime__$internal_backend_html5_HTML5Window.textInput.style.color = "transparent";
@@ -61320,6 +61415,7 @@ lime__$internal_backend_html5_HTML5Window.prototype = {
 			lime__$internal_backend_html5_HTML5Window.textInput.focus();
 			lime__$internal_backend_html5_HTML5Window.textInput.select();
 		} else if(lime__$internal_backend_html5_HTML5Window.textInput != null) {
+			lime__$internal_backend_html5_HTML5Window.textInput.blur();
 			lime__$internal_backend_html5_HTML5Window.textInput.removeEventListener("input",$bind(this,this.handleInputEvent),true);
 			lime__$internal_backend_html5_HTML5Window.textInput.removeEventListener("blur",$bind(this,this.handleFocusEvent),true);
 			lime__$internal_backend_html5_HTML5Window.textInput.removeEventListener("cut",$bind(this,this.handleCutOrCopyEvent),true);
@@ -61327,19 +61423,18 @@ lime__$internal_backend_html5_HTML5Window.prototype = {
 			lime__$internal_backend_html5_HTML5Window.textInput.removeEventListener("paste",$bind(this,this.handlePasteEvent),true);
 			lime__$internal_backend_html5_HTML5Window.textInput.removeEventListener("compositionstart",$bind(this,this.handleCompositionstartEvent),true);
 			lime__$internal_backend_html5_HTML5Window.textInput.removeEventListener("compositionend",$bind(this,this.handleCompositionendEvent),true);
-			lime__$internal_backend_html5_HTML5Window.textInput.blur();
 		}
 		return this.textInputEnabled = value;
 	}
 	,setTextInputRect: function(value) {
 		return this.textInputRect = value;
 	}
-	,inputing: null
+	,imeCompositionActive: null
 	,handleCompositionstartEvent: function(e) {
-		this.inputing = true;
+		this.imeCompositionActive = true;
 	}
 	,handleCompositionendEvent: function(e) {
-		this.inputing = false;
+		this.imeCompositionActive = false;
 		this.handleInputEvent(e);
 	}
 	,setTitle: function(value) {
@@ -75683,7 +75778,7 @@ var lime_utils_AssetCache = function() {
 	this.audio = new haxe_ds_StringMap();
 	this.font = new haxe_ds_StringMap();
 	this.image = new haxe_ds_StringMap();
-	this.version = 621674;
+	this.version = 977295;
 };
 $hxClasses["lime.utils.AssetCache"] = lime_utils_AssetCache;
 lime_utils_AssetCache.__name__ = "lime.utils.AssetCache";
@@ -75989,15 +76084,15 @@ lime_utils_AssetLibrary.prototype = {
 		if(Object.prototype.hasOwnProperty.call(this.classTypes.h,id)) {
 			return true;
 		}
-		var requestedType = type != null ? js_Boot.__cast(type , String) : null;
-		if(requestedType == null) {
-			if(!Object.prototype.hasOwnProperty.call(this.cachedBytes.h,id)) {
-				return Object.prototype.hasOwnProperty.call(this.cachedText.h,id);
+		var _g = js_Boot.__cast(type , String);
+		if(_g == null) {
+			if(!(Object.prototype.hasOwnProperty.call(this.cachedBytes.h,id) || Object.prototype.hasOwnProperty.call(this.cachedText.h,id) || Object.prototype.hasOwnProperty.call(this.cachedImages.h,id) || Object.prototype.hasOwnProperty.call(this.cachedAudioBuffers.h,id))) {
+				return Object.prototype.hasOwnProperty.call(this.cachedFonts.h,id);
 			} else {
 				return true;
 			}
 		} else {
-			switch(requestedType) {
+			switch(_g) {
 			case "FONT":
 				return Object.prototype.hasOwnProperty.call(this.cachedFonts.h,id);
 			case "IMAGE":
@@ -76066,7 +76161,7 @@ lime_utils_AssetLibrary.prototype = {
 				if(!this.preload.h[id]) {
 					continue;
 				}
-				lime_utils_Log.verbose("Preloading asset: " + id + " [" + this.types.h[id] + "]",{ fileName : "lime/utils/AssetLibrary.hx", lineNumber : 405, className : "lime.utils.AssetLibrary", methodName : "load"});
+				lime_utils_Log.verbose("Preloading asset: " + id + " [" + this.types.h[id] + "]",{ fileName : "lime/utils/AssetLibrary.hx", lineNumber : 408, className : "lime.utils.AssetLibrary", methodName : "load"});
 				var _g = this.types.h[id];
 				if(_g != null) {
 					switch(_g) {
@@ -76244,7 +76339,7 @@ lime_utils_AssetLibrary.prototype = {
 	,__assetLoaded: function(id) {
 		this.assetsLoaded++;
 		if(id != null) {
-			lime_utils_Log.verbose("Loaded asset: " + id + " [" + this.types.h[id] + "] (" + (this.assetsLoaded - 1) + "/" + (this.assetsTotal - 1) + ")",{ fileName : "lime/utils/AssetLibrary.hx", lineNumber : 619, className : "lime.utils.AssetLibrary", methodName : "__assetLoaded"});
+			lime_utils_Log.verbose("Loaded asset: " + id + " [" + this.types.h[id] + "] (" + (this.assetsLoaded - 1) + "/" + (this.assetsTotal - 1) + ")",{ fileName : "lime/utils/AssetLibrary.hx", lineNumber : 622, className : "lime.utils.AssetLibrary", methodName : "__assetLoaded"});
 		}
 		if(id != null) {
 			var size = Object.prototype.hasOwnProperty.call(this.sizes.h,id) ? this.sizes.h[id] : 0;
@@ -76427,9 +76522,9 @@ lime_utils_AssetLibrary.prototype = {
 	}
 	,loadAudioBuffer_onError: function(id,message) {
 		if(message != null && message != "") {
-			lime_utils_Log.warn("Could not load \"" + id + "\": " + Std.string(message),{ fileName : "lime/utils/AssetLibrary.hx", lineNumber : 865, className : "lime.utils.AssetLibrary", methodName : "loadAudioBuffer_onError"});
+			lime_utils_Log.warn("Could not load \"" + id + "\": " + Std.string(message),{ fileName : "lime/utils/AssetLibrary.hx", lineNumber : 868, className : "lime.utils.AssetLibrary", methodName : "loadAudioBuffer_onError"});
 		} else {
-			lime_utils_Log.warn("Could not load \"" + id + "\"",{ fileName : "lime/utils/AssetLibrary.hx", lineNumber : 869, className : "lime.utils.AssetLibrary", methodName : "loadAudioBuffer_onError"});
+			lime_utils_Log.warn("Could not load \"" + id + "\"",{ fileName : "lime/utils/AssetLibrary.hx", lineNumber : 872, className : "lime.utils.AssetLibrary", methodName : "loadAudioBuffer_onError"});
 		}
 		this.loadAudioBuffer_onComplete(id,new lime_media_AudioBuffer());
 	}
@@ -78115,13 +78210,14 @@ openfl_Lib.setTimeout = function(closure,delay,args) {
 	var id = ++openfl_Lib.__lastTimerID;
 	var this1 = openfl_Lib.__timers;
 	var v = haxe_Timer.delay(function() {
+		openfl_Lib.__timers.remove(id);
 		closure.apply(closure,args == null ? [] : args);
 	},delay);
 	this1.h[id] = v;
 	return id;
 };
 openfl_Lib.trace = function(arg) {
-	haxe_Log.trace(arg,{ fileName : "openfl/Lib.hx", lineNumber : 568, className : "openfl.Lib", methodName : "trace"});
+	haxe_Log.trace(arg,{ fileName : "openfl/Lib.hx", lineNumber : 569, className : "openfl.Lib", methodName : "trace"});
 };
 openfl_Lib.isXMLName = function(name) {
 	if(name == null) {
@@ -79169,7 +79265,7 @@ openfl_display_DisplayObjectRenderer.prototype = $extend(openfl_events_EventDisp
 			colorTransform.__combine(renderer.__worldColorTransform);
 		}
 		var updated = false;
-		if(displayObject.get_cacheAsBitmap() || renderer.__type != "opengl" && !colorTransform.__isDefault(true)) {
+		if(displayObject.get_cacheAsBitmap() || renderer.__type != "opengl" && !colorTransform.__isDefault(true) || renderer.__type == "opengl" && displayObject.get_scale9Grid() != null) {
 			var rect = null;
 			var needRender = displayObject.__cacheBitmap == null || displayObject.__renderDirty && (force || displayObject.__children != null && displayObject.__children.length > 0) || displayObject.opaqueBackground != displayObject.__cacheBitmapBackground;
 			var softwareDirty = needRender || displayObject.__graphics != null && displayObject.__graphics.__softwareDirty || !displayObject.__cacheBitmapColorTransform.__equals(colorTransform,true);
@@ -79215,6 +79311,16 @@ openfl_display_DisplayObjectRenderer.prototype = $extend(openfl_events_EventDisp
 			if(!needRender && renderer.__type != "opengl" && displayObject.__cacheBitmapData != null && displayObject.__cacheBitmapData.image != null && displayObject.__cacheBitmapData.image.version < displayObject.__cacheBitmapData.__textureVersion) {
 				needRender = true;
 			}
+			if(!needRender) {
+				var current = displayObject;
+				while(current != null) {
+					if(current.get_scrollRect() != null) {
+						updateTransform = true;
+						break;
+					}
+					current = current.parent;
+				}
+			}
 			displayObject.__cacheBitmapMatrix.copyFrom(bitmapMatrix);
 			displayObject.__cacheBitmapMatrix.tx = 0;
 			displayObject.__cacheBitmapMatrix.ty = 0;
@@ -79228,8 +79334,8 @@ openfl_display_DisplayObjectRenderer.prototype = $extend(openfl_events_EventDisp
 			if(updateTransform || needRender) {
 				rect = openfl_geom_Rectangle.__pool.get();
 				displayObject.__getFilterBounds(rect,displayObject.__cacheBitmapMatrix);
-				filterWidth = Math.ceil(rect.width * pixelRatio);
-				filterHeight = Math.ceil(rect.height * pixelRatio);
+				filterWidth = rect.width > 0 ? Math.ceil((rect.width + 1) * pixelRatio) : 0;
+				filterHeight = rect.height > 0 ? Math.ceil((rect.height + 1) * pixelRatio) : 0;
 				offsetX = rect.x > 0 ? Math.ceil(rect.x) : Math.floor(rect.x);
 				offsetY = rect.y > 0 ? Math.ceil(rect.y) : Math.floor(rect.y);
 				if(displayObject.__cacheBitmapData != null) {
@@ -80521,17 +80627,17 @@ openfl_display_Graphics.prototype = {
 		}
 		var iy1 = anchorY;
 		var iy2 = anchorY;
-		if(!((controlY1 < anchorY && controlY1 > this.__positionX || controlY1 > anchorY && controlY1 < this.__positionX) && (controlY2 < anchorY && controlY2 > this.__positionX || controlY2 > anchorY && controlY2 < this.__positionX))) {
-			var u = 2 * this.__positionX - 4 * controlY1 + 2 * controlY2;
-			var v = controlY1 - this.__positionX;
-			var w = -this.__positionX + 3 * controlY1 + anchorY - 3 * controlY2;
+		if(!((controlY1 < anchorY && controlY1 > this.__positionY || controlY1 > anchorY && controlY1 < this.__positionY) && (controlY2 < anchorY && controlY2 > this.__positionY || controlY2 > anchorY && controlY2 < this.__positionY))) {
+			var u = 2 * this.__positionY - 4 * controlY1 + 2 * controlY2;
+			var v = controlY1 - this.__positionY;
+			var w = -this.__positionY + 3 * controlY1 + anchorY - 3 * controlY2;
 			var t1 = (-u + Math.sqrt(u * u - 4 * v * w)) / (2 * w);
 			var t2 = (-u - Math.sqrt(u * u - 4 * v * w)) / (2 * w);
 			if(t1 > 0 && t1 < 1) {
-				iy1 = this.__calculateBezierCubicPoint(t1,this.__positionX,controlY1,controlY2,anchorY);
+				iy1 = this.__calculateBezierCubicPoint(t1,this.__positionY,controlY1,controlY2,anchorY);
 			}
 			if(t2 > 0 && t2 < 1) {
-				iy2 = this.__calculateBezierCubicPoint(t2,this.__positionX,controlY1,controlY2,anchorY);
+				iy2 = this.__calculateBezierCubicPoint(t2,this.__positionY,controlY1,controlY2,anchorY);
 			}
 		}
 		this.__inflateBounds(ix1 - this.__strokePadding,iy1 - this.__strokePadding);
@@ -80566,6 +80672,8 @@ openfl_display_Graphics.prototype = {
 		this.__inflateBounds(ix + this.__strokePadding,iy + this.__strokePadding);
 		this.__positionX = anchorX;
 		this.__positionY = anchorY;
+		this.__inflateBounds(this.__positionX - this.__strokePadding,this.__positionY - this.__strokePadding);
+		this.__inflateBounds(this.__positionX + this.__strokePadding,this.__positionY + this.__strokePadding);
 		this.__commands.curveTo(controlX,controlY,anchorX,anchorY);
 		this.set___dirty(true);
 	}
@@ -82404,14 +82512,17 @@ openfl_display_Graphics.prototype = {
 			graphicsData.push(path);
 		}
 	}
-	,__update: function(displayMatrix) {
+	,__update: function(displayMatrix,pixelRatio) {
 		if(this.__bounds == null || this.__bounds.width <= 0 || this.__bounds.height <= 0) {
 			return;
 		}
 		var parentTransform = this.__owner.__renderTransform;
-		var scaleX = 1.0;
-		var scaleY = 1.0;
-		if(parentTransform != null) {
+		if(parentTransform == null) {
+			return;
+		}
+		var scaleX = pixelRatio;
+		var scaleY = pixelRatio;
+		if(this.__owner.__worldScale9Grid == null) {
 			if(parentTransform.b == 0) {
 				scaleX = Math.abs(parentTransform.a);
 			} else {
@@ -82422,19 +82533,17 @@ openfl_display_Graphics.prototype = {
 			} else {
 				scaleY = Math.sqrt(parentTransform.c * parentTransform.c + parentTransform.d * parentTransform.d);
 			}
-		} else {
-			return;
-		}
-		if(displayMatrix != null) {
-			if(displayMatrix.b == 0) {
-				scaleX *= displayMatrix.a;
-			} else {
-				scaleX *= Math.sqrt(displayMatrix.a * displayMatrix.a + displayMatrix.b * displayMatrix.b);
-			}
-			if(displayMatrix.c == 0) {
-				scaleY *= displayMatrix.d;
-			} else {
-				scaleY *= Math.sqrt(displayMatrix.c * displayMatrix.c + displayMatrix.d * displayMatrix.d);
+			if(displayMatrix != null) {
+				if(displayMatrix.b == 0) {
+					scaleX *= displayMatrix.a;
+				} else {
+					scaleX *= Math.sqrt(displayMatrix.a * displayMatrix.a + displayMatrix.b * displayMatrix.b);
+				}
+				if(displayMatrix.c == 0) {
+					scaleY *= displayMatrix.d;
+				} else {
+					scaleY *= Math.sqrt(displayMatrix.c * displayMatrix.c + displayMatrix.d * displayMatrix.d);
+				}
 			}
 		}
 		var width = this.__bounds.width * scaleX;
@@ -82455,10 +82564,19 @@ openfl_display_Graphics.prototype = {
 			height = openfl_display_Graphics.maxTextureHeight;
 			scaleY = openfl_display_Graphics.maxTextureHeight / this.__bounds.height;
 		}
-		this.__renderTransform.a = width / this.__bounds.width;
-		this.__renderTransform.d = height / this.__bounds.height;
-		var inverseA = 1 / this.__renderTransform.a;
-		var inverseD = 1 / this.__renderTransform.d;
+		var inverseA;
+		var inverseD;
+		if(this.__owner.__worldScale9Grid != null) {
+			this.__renderTransform.a = pixelRatio;
+			this.__renderTransform.d = pixelRatio;
+			inverseA = 1 / pixelRatio;
+			inverseD = 1 / pixelRatio;
+		} else {
+			this.__renderTransform.a = width / this.__bounds.width;
+			this.__renderTransform.d = height / this.__bounds.height;
+			inverseA = 1 / this.__renderTransform.a;
+			inverseD = 1 / this.__renderTransform.d;
+		}
 		this.__worldTransform.a = inverseA * parentTransform.a;
 		this.__worldTransform.b = inverseA * parentTransform.b;
 		this.__worldTransform.c = inverseD * parentTransform.c;
@@ -85498,10 +85616,14 @@ var openfl_display_Stage = function($window,color) {
 	this.__rollOutStack = [];
 	this.__mouseOutStack = [];
 	this.__touchData = new haxe_ds_IntMap();
+	if(openfl_Lib.get_current().__loaderInfo == null) {
+		openfl_Lib.get_current().__loaderInfo = openfl_display_LoaderInfo.create(null);
+		openfl_Lib.get_current().__loaderInfo.content = openfl_Lib.get_current();
+	}
+	this.__uncaughtErrorEvents = openfl_Lib.get_current().__loaderInfo.uncaughtErrorEvents;
 	this.application = $window.application;
 	this.window = $window;
 	this.set_color(color);
-	this.__uncaughtErrorEvents = openfl_Lib.get_current().__loaderInfo.uncaughtErrorEvents;
 	this.__contentsScaleFactor = $window.__scale;
 	this.__wasFullscreen = $window.__fullscreen;
 	this.__resize();
@@ -85548,6 +85670,7 @@ openfl_display_Stage.prototype = $extend(openfl_display_DisplayObjectContainer.p
 	,__fullScreenSourceRect: null
 	,__invalidated: null
 	,__lastClickTime: null
+	,__lastClickTarget: null
 	,__logicalWidth: null
 	,__logicalHeight: null
 	,__macKeyboard: null
@@ -86993,13 +87116,15 @@ openfl_display_Stage.prototype = $extend(openfl_display_DisplayObjectContainer.p
 		if(clickType != null) {
 			event = openfl_events_MouseEvent.__create(clickType,button,this.__mouseX,this.__mouseY,target.__globalToLocal(targetPoint,localPoint),target);
 			this.__dispatchStack(event,stack);
-			if(type == "mouseUp" && (js_Boot.__cast(target , openfl_display_InteractiveObject)).doubleClickEnabled) {
+			if(type == "mouseUp" && target.doubleClickEnabled) {
 				var currentTime = openfl_Lib.getTimer();
-				if(currentTime - this.__lastClickTime < 500) {
+				if(currentTime - this.__lastClickTime < 500 && target == this.__lastClickTarget) {
 					event = openfl_events_MouseEvent.__create("doubleClick",button,this.__mouseX,this.__mouseY,target.__globalToLocal(targetPoint,localPoint),target);
 					this.__dispatchStack(event,stack);
 					this.__lastClickTime = 0;
+					this.__lastClickTarget = null;
 				} else {
+					this.__lastClickTarget = target;
 					this.__lastClickTime = currentTime;
 				}
 			}
@@ -89580,23 +89705,28 @@ openfl_display__$internal_CanvasBitmap.renderDrawable = function(bitmap,renderer
 											renderer.__pushMaskObject(bitmap);
 											context.globalAlpha = alpha;
 											if(scale9Grid != null && transform.b == 0 && transform.c == 0) {
+												var pixelRatio = renderer.__pixelRatio;
+												var matrix = openfl_geom_Matrix.__pool.get();
+												matrix.translate(transform.tx,transform.ty);
+												renderer.setTransform(matrix,context);
+												openfl_geom_Matrix.__pool.release(matrix);
 												var bounds = graphics.__bounds;
 												var scaleX = graphics.__renderTransform.a / graphics.__bitmapScale;
 												var scaleY = graphics.__renderTransform.d / graphics.__bitmapScale;
-												var renderScaleX = transform.a;
-												var renderScaleY = transform.d;
+												var renderScaleX = scaleX * transform.a;
+												var renderScaleY = scaleY * transform.d;
 												var left = Math.max(1,Math.round(scale9Grid.x * scaleX));
 												var top = Math.round(scale9Grid.y * scaleY);
 												var right = Math.max(1,Math.round((bounds.get_right() - scale9Grid.get_right()) * scaleX));
 												var bottom = Math.round((bounds.get_bottom() - scale9Grid.get_bottom()) * scaleY);
 												var centerWidth = Math.round(scale9Grid.width * scaleX);
 												var centerHeight = Math.round(scale9Grid.height * scaleY);
-												var renderLeft = Math.round(scale9Grid.x * renderScaleX);
-												var renderTop = Math.round(scale9Grid.y * renderScaleY);
-												var renderRight = Math.round((bounds.get_right() - scale9Grid.get_right()) * renderScaleX);
-												var renderBottom = Math.round((bounds.get_bottom() - scale9Grid.get_bottom()) * renderScaleY);
-												var renderCenterWidth = Math.round(width * renderScaleX) - renderLeft - renderRight;
-												var renderCenterHeight = Math.round(height * renderScaleY) - renderTop - renderBottom;
+												var renderLeft = Math.round(left / pixelRatio);
+												var renderTop = Math.round(top / pixelRatio);
+												var renderRight = Math.round(right / pixelRatio);
+												var renderBottom = Math.round(bottom / pixelRatio);
+												var renderCenterWidth = bounds.width * renderScaleX - renderLeft - renderRight;
+												var renderCenterHeight = bounds.height * renderScaleY - renderTop - renderBottom;
 												renderer.applySmoothing(context,false);
 												if(centerWidth != 0 && centerHeight != 0) {
 													context.drawImage(canvas,0,0,left,top,0,0,renderLeft,renderTop);
@@ -89620,11 +89750,7 @@ openfl_display__$internal_CanvasBitmap.renderDrawable = function(bitmap,renderer
 													context.drawImage(canvas,left + centerWidth,0,right,height,renderLeft + renderCenterWidth,0,renderRight,renderHeight);
 												}
 											} else {
-												var matrix = openfl_geom_Matrix.__pool.get();
-												matrix.scale(1 / graphics.__bitmapScale,1 / graphics.__bitmapScale);
-												matrix.concat(transform);
 												renderer.setTransform(transform,context);
-												openfl_geom_Matrix.__pool.release(matrix);
 												context.drawImage(canvas,0,0,width,height);
 											}
 											renderer.__popMaskObject(bitmap);
@@ -89729,23 +89855,28 @@ openfl_display__$internal_CanvasDisplayObject.render = function(displayObject,re
 							renderer.__pushMaskObject(displayObject);
 							context.globalAlpha = alpha;
 							if(scale9Grid != null && transform.b == 0 && transform.c == 0) {
+								var pixelRatio = renderer.__pixelRatio;
+								var matrix = openfl_geom_Matrix.__pool.get();
+								matrix.translate(transform.tx,transform.ty);
+								renderer.setTransform(matrix,context);
+								openfl_geom_Matrix.__pool.release(matrix);
 								var bounds = graphics.__bounds;
 								var scaleX = graphics.__renderTransform.a / graphics.__bitmapScale;
 								var scaleY = graphics.__renderTransform.d / graphics.__bitmapScale;
-								var renderScaleX = transform.a;
-								var renderScaleY = transform.d;
+								var renderScaleX = scaleX * transform.a;
+								var renderScaleY = scaleY * transform.d;
 								var left = Math.max(1,Math.round(scale9Grid.x * scaleX));
 								var top = Math.round(scale9Grid.y * scaleY);
 								var right = Math.max(1,Math.round((bounds.get_right() - scale9Grid.get_right()) * scaleX));
 								var bottom = Math.round((bounds.get_bottom() - scale9Grid.get_bottom()) * scaleY);
 								var centerWidth = Math.round(scale9Grid.width * scaleX);
 								var centerHeight = Math.round(scale9Grid.height * scaleY);
-								var renderLeft = Math.round(scale9Grid.x * renderScaleX);
-								var renderTop = Math.round(scale9Grid.y * renderScaleY);
-								var renderRight = Math.round((bounds.get_right() - scale9Grid.get_right()) * renderScaleX);
-								var renderBottom = Math.round((bounds.get_bottom() - scale9Grid.get_bottom()) * renderScaleY);
-								var renderCenterWidth = Math.round(width * renderScaleX) - renderLeft - renderRight;
-								var renderCenterHeight = Math.round(height * renderScaleY) - renderTop - renderBottom;
+								var renderLeft = Math.round(left / pixelRatio);
+								var renderTop = Math.round(top / pixelRatio);
+								var renderRight = Math.round(right / pixelRatio);
+								var renderBottom = Math.round(bottom / pixelRatio);
+								var renderCenterWidth = bounds.width * renderScaleX - renderLeft - renderRight;
+								var renderCenterHeight = bounds.height * renderScaleY - renderTop - renderBottom;
 								renderer.applySmoothing(context,false);
 								if(centerWidth != 0 && centerHeight != 0) {
 									context.drawImage(canvas,0,0,left,top,0,0,renderLeft,renderTop);
@@ -89769,11 +89900,7 @@ openfl_display__$internal_CanvasDisplayObject.render = function(displayObject,re
 									context.drawImage(canvas,left + centerWidth,0,right,height,renderLeft + renderCenterWidth,0,renderRight,renderHeight);
 								}
 							} else {
-								var matrix = openfl_geom_Matrix.__pool.get();
-								matrix.scale(1 / graphics.__bitmapScale,1 / graphics.__bitmapScale);
-								matrix.concat(transform);
 								renderer.setTransform(transform,context);
-								openfl_geom_Matrix.__pool.release(matrix);
 								context.drawImage(canvas,0,0,width,height);
 							}
 							renderer.__popMaskObject(displayObject);
@@ -89847,23 +89974,28 @@ openfl_display__$internal_CanvasDisplayObject.renderDrawable = function(displayO
 											renderer.__pushMaskObject(displayObject);
 											context.globalAlpha = alpha;
 											if(scale9Grid != null && transform.b == 0 && transform.c == 0) {
+												var pixelRatio = renderer.__pixelRatio;
+												var matrix = openfl_geom_Matrix.__pool.get();
+												matrix.translate(transform.tx,transform.ty);
+												renderer.setTransform(matrix,context);
+												openfl_geom_Matrix.__pool.release(matrix);
 												var bounds = graphics.__bounds;
 												var scaleX = graphics.__renderTransform.a / graphics.__bitmapScale;
 												var scaleY = graphics.__renderTransform.d / graphics.__bitmapScale;
-												var renderScaleX = transform.a;
-												var renderScaleY = transform.d;
+												var renderScaleX = scaleX * transform.a;
+												var renderScaleY = scaleY * transform.d;
 												var left = Math.max(1,Math.round(scale9Grid.x * scaleX));
 												var top = Math.round(scale9Grid.y * scaleY);
 												var right = Math.max(1,Math.round((bounds.get_right() - scale9Grid.get_right()) * scaleX));
 												var bottom = Math.round((bounds.get_bottom() - scale9Grid.get_bottom()) * scaleY);
 												var centerWidth = Math.round(scale9Grid.width * scaleX);
 												var centerHeight = Math.round(scale9Grid.height * scaleY);
-												var renderLeft = Math.round(scale9Grid.x * renderScaleX);
-												var renderTop = Math.round(scale9Grid.y * renderScaleY);
-												var renderRight = Math.round((bounds.get_right() - scale9Grid.get_right()) * renderScaleX);
-												var renderBottom = Math.round((bounds.get_bottom() - scale9Grid.get_bottom()) * renderScaleY);
-												var renderCenterWidth = Math.round(width * renderScaleX) - renderLeft - renderRight;
-												var renderCenterHeight = Math.round(height * renderScaleY) - renderTop - renderBottom;
+												var renderLeft = Math.round(left / pixelRatio);
+												var renderTop = Math.round(top / pixelRatio);
+												var renderRight = Math.round(right / pixelRatio);
+												var renderBottom = Math.round(bottom / pixelRatio);
+												var renderCenterWidth = bounds.width * renderScaleX - renderLeft - renderRight;
+												var renderCenterHeight = bounds.height * renderScaleY - renderTop - renderBottom;
 												renderer.applySmoothing(context,false);
 												if(centerWidth != 0 && centerHeight != 0) {
 													context.drawImage(canvas,0,0,left,top,0,0,renderLeft,renderTop);
@@ -89887,11 +90019,7 @@ openfl_display__$internal_CanvasDisplayObject.renderDrawable = function(displayO
 													context.drawImage(canvas,left + centerWidth,0,right,height,renderLeft + renderCenterWidth,0,renderRight,renderHeight);
 												}
 											} else {
-												var matrix = openfl_geom_Matrix.__pool.get();
-												matrix.scale(1 / graphics.__bitmapScale,1 / graphics.__bitmapScale);
-												matrix.concat(transform);
 												renderer.setTransform(transform,context);
-												openfl_geom_Matrix.__pool.release(matrix);
 												context.drawImage(canvas,0,0,width,height);
 											}
 											renderer.__popMaskObject(displayObject);
@@ -95109,7 +95237,7 @@ openfl_display__$internal_CanvasGraphics.playCommands = function(commands,stroke
 			var this13 = data;
 			var c12 = this13;
 			if(stroke && openfl_display__$internal_CanvasGraphics.hasStroke) {
-				openfl_display__$internal_CanvasGraphics.closePath();
+				openfl_display__$internal_CanvasGraphics.closePath(true);
 			}
 			openfl_display__$internal_CanvasGraphics.context.moveTo(positionX - offsetX,positionY - offsetY);
 			openfl_display__$internal_CanvasGraphics.context.strokeStyle = openfl_display__$internal_CanvasGraphics.createBitmapFill(c12.buffer.o[c12.oPos],c12.buffer.b[c12.bPos],c12.buffer.b[c12.bPos + 1]);
@@ -95197,7 +95325,7 @@ openfl_display__$internal_CanvasGraphics.playCommands = function(commands,stroke
 			var this14 = data;
 			var c13 = this14;
 			if(stroke && openfl_display__$internal_CanvasGraphics.hasStroke) {
-				openfl_display__$internal_CanvasGraphics.closePath();
+				openfl_display__$internal_CanvasGraphics.closePath(true);
 			}
 			openfl_display__$internal_CanvasGraphics.context.moveTo(positionX - offsetX,positionY - offsetY);
 			openfl_display__$internal_CanvasGraphics.context.strokeStyle = openfl_display__$internal_CanvasGraphics.createGradientPattern(c13.buffer.o[c13.oPos],c13.buffer.ii[c13.iiPos],c13.buffer.ff[c13.ffPos],c13.buffer.ii[c13.iiPos + 1],c13.buffer.o[c13.oPos + 1],c13.buffer.o[c13.oPos + 2],c13.buffer.o[c13.oPos + 3],c13.buffer.f[c13.fPos]);
@@ -95621,7 +95749,8 @@ openfl_display__$internal_CanvasGraphics.playCommands = function(commands,stroke
 	}
 };
 openfl_display__$internal_CanvasGraphics.render = function(graphics,renderer) {
-	graphics.__update(renderer.__worldTransform);
+	var pixelRatio = renderer.__pixelRatio;
+	graphics.__update(renderer.__worldTransform,pixelRatio);
 	if(graphics.__softwareDirty) {
 		openfl_display__$internal_CanvasGraphics.hitTesting = false;
 		openfl_display__$internal_CanvasGraphics.graphics = graphics;
@@ -98422,23 +98551,28 @@ openfl_display__$internal_CanvasShape.render = function(shape,renderer) {
 				renderer.__pushMaskObject(shape);
 				context.globalAlpha = alpha;
 				if(scale9Grid != null && transform.b == 0 && transform.c == 0) {
+					var pixelRatio = renderer.__pixelRatio;
+					var matrix = openfl_geom_Matrix.__pool.get();
+					matrix.translate(transform.tx,transform.ty);
+					renderer.setTransform(matrix,context);
+					openfl_geom_Matrix.__pool.release(matrix);
 					var bounds = graphics.__bounds;
 					var scaleX = graphics.__renderTransform.a / graphics.__bitmapScale;
 					var scaleY = graphics.__renderTransform.d / graphics.__bitmapScale;
-					var renderScaleX = transform.a;
-					var renderScaleY = transform.d;
+					var renderScaleX = scaleX * transform.a;
+					var renderScaleY = scaleY * transform.d;
 					var left = Math.max(1,Math.round(scale9Grid.x * scaleX));
 					var top = Math.round(scale9Grid.y * scaleY);
 					var right = Math.max(1,Math.round((bounds.get_right() - scale9Grid.get_right()) * scaleX));
 					var bottom = Math.round((bounds.get_bottom() - scale9Grid.get_bottom()) * scaleY);
 					var centerWidth = Math.round(scale9Grid.width * scaleX);
 					var centerHeight = Math.round(scale9Grid.height * scaleY);
-					var renderLeft = Math.round(scale9Grid.x * renderScaleX);
-					var renderTop = Math.round(scale9Grid.y * renderScaleY);
-					var renderRight = Math.round((bounds.get_right() - scale9Grid.get_right()) * renderScaleX);
-					var renderBottom = Math.round((bounds.get_bottom() - scale9Grid.get_bottom()) * renderScaleY);
-					var renderCenterWidth = Math.round(width * renderScaleX) - renderLeft - renderRight;
-					var renderCenterHeight = Math.round(height * renderScaleY) - renderTop - renderBottom;
+					var renderLeft = Math.round(left / pixelRatio);
+					var renderTop = Math.round(top / pixelRatio);
+					var renderRight = Math.round(right / pixelRatio);
+					var renderBottom = Math.round(bottom / pixelRatio);
+					var renderCenterWidth = bounds.width * renderScaleX - renderLeft - renderRight;
+					var renderCenterHeight = bounds.height * renderScaleY - renderTop - renderBottom;
 					renderer.applySmoothing(context,false);
 					if(centerWidth != 0 && centerHeight != 0) {
 						context.drawImage(canvas,0,0,left,top,0,0,renderLeft,renderTop);
@@ -98462,11 +98596,7 @@ openfl_display__$internal_CanvasShape.render = function(shape,renderer) {
 						context.drawImage(canvas,left + centerWidth,0,right,height,renderLeft + renderCenterWidth,0,renderRight,renderHeight);
 					}
 				} else {
-					var matrix = openfl_geom_Matrix.__pool.get();
-					matrix.scale(1 / graphics.__bitmapScale,1 / graphics.__bitmapScale);
-					matrix.concat(transform);
 					renderer.setTransform(transform,context);
-					openfl_geom_Matrix.__pool.release(matrix);
 					context.drawImage(canvas,0,0,width,height);
 				}
 				renderer.__popMaskObject(shape);
@@ -98541,9 +98671,9 @@ openfl_display__$internal_CanvasTextField.render = function(textField,renderer,t
 		}
 		graphics.__bounds.copyFrom(bounds);
 	}
-	graphics.__update(renderer.__worldTransform);
+	var pixelRatio = renderer.__pixelRatio;
+	graphics.__update(renderer.__worldTransform,pixelRatio);
 	if(textField.__dirty || graphics.__softwareDirty) {
-		var pixelRatio = renderer.__pixelRatio;
 		var width = Math.round(graphics.__width * pixelRatio);
 		var height = Math.round(graphics.__height * pixelRatio);
 		if((textEngine.text == null || textEngine.text == "") && !textEngine.background && !textEngine.border && !textEngine.__hasFocus && (textEngine.type != 1 || !textEngine.selectable) || (textEngine.width <= 0 || textEngine.height <= 0) && textEngine.autoSize != 2) {
@@ -98681,8 +98811,9 @@ openfl_display__$internal_CanvasTextField.render = function(textField,renderer,t
 						openfl_display__$internal_CanvasTextField.context.beginPath();
 						openfl_display__$internal_CanvasTextField.context.strokeStyle = color;
 						openfl_display__$internal_CanvasTextField.context.lineWidth = 1;
+						var descent = Math.floor(group1.ascent * 0.185);
 						var x = group1.offsetX + scrollX - bounds.x;
-						var y = Math.ceil(group1.offsetY + scrollY + group1.ascent - bounds.y) + 0.5;
+						var y = Math.ceil(group1.offsetY + scrollY + group1.ascent - bounds.y) + descent + 0.5;
 						openfl_display__$internal_CanvasTextField.context.moveTo(x,y);
 						openfl_display__$internal_CanvasTextField.context.lineTo(x + group1.width,y);
 						openfl_display__$internal_CanvasTextField.context.stroke();
@@ -98829,9 +98960,9 @@ openfl_display__$internal_CanvasTextField.renderDrawable = function(textField,re
 				}
 				graphics.__bounds.copyFrom(bounds);
 			}
-			graphics.__update(renderer.__worldTransform);
+			var pixelRatio = renderer.__pixelRatio;
+			graphics.__update(renderer.__worldTransform,pixelRatio);
 			if(textField.__dirty || graphics.__softwareDirty) {
-				var pixelRatio = renderer.__pixelRatio;
 				var width = Math.round(graphics.__width * pixelRatio);
 				var height = Math.round(graphics.__height * pixelRatio);
 				if((textEngine.text == null || textEngine.text == "") && !textEngine.background && !textEngine.border && !textEngine.__hasFocus && (textEngine.type != 1 || !textEngine.selectable) || (textEngine.width <= 0 || textEngine.height <= 0) && textEngine.autoSize != 2) {
@@ -98969,8 +99100,9 @@ openfl_display__$internal_CanvasTextField.renderDrawable = function(textField,re
 								openfl_display__$internal_CanvasTextField.context.beginPath();
 								openfl_display__$internal_CanvasTextField.context.strokeStyle = color;
 								openfl_display__$internal_CanvasTextField.context.lineWidth = 1;
+								var descent = Math.floor(group1.ascent * 0.185);
 								var x = group1.offsetX + scrollX - bounds.x;
-								var y = Math.ceil(group1.offsetY + scrollY + group1.ascent - bounds.y) + 0.5;
+								var y = Math.ceil(group1.offsetY + scrollY + group1.ascent - bounds.y) + descent + 0.5;
 								openfl_display__$internal_CanvasTextField.context.moveTo(x,y);
 								openfl_display__$internal_CanvasTextField.context.lineTo(x + group1.width,y);
 								openfl_display__$internal_CanvasTextField.context.stroke();
@@ -99065,23 +99197,28 @@ openfl_display__$internal_CanvasTextField.renderDrawable = function(textField,re
 												renderer.__pushMaskObject(textField);
 												context.globalAlpha = alpha;
 												if(scale9Grid != null && transform.b == 0 && transform.c == 0) {
+													var pixelRatio = renderer.__pixelRatio;
+													var matrix = openfl_geom_Matrix.__pool.get();
+													matrix.translate(transform.tx,transform.ty);
+													renderer.setTransform(matrix,context);
+													openfl_geom_Matrix.__pool.release(matrix);
 													var bounds = graphics.__bounds;
 													var scaleX = graphics.__renderTransform.a / graphics.__bitmapScale;
 													var scaleY = graphics.__renderTransform.d / graphics.__bitmapScale;
-													var renderScaleX = transform.a;
-													var renderScaleY = transform.d;
+													var renderScaleX = scaleX * transform.a;
+													var renderScaleY = scaleY * transform.d;
 													var left = Math.max(1,Math.round(scale9Grid.x * scaleX));
 													var top = Math.round(scale9Grid.y * scaleY);
 													var right = Math.max(1,Math.round((bounds.get_right() - scale9Grid.get_right()) * scaleX));
 													var bottom = Math.round((bounds.get_bottom() - scale9Grid.get_bottom()) * scaleY);
 													var centerWidth = Math.round(scale9Grid.width * scaleX);
 													var centerHeight = Math.round(scale9Grid.height * scaleY);
-													var renderLeft = Math.round(scale9Grid.x * renderScaleX);
-													var renderTop = Math.round(scale9Grid.y * renderScaleY);
-													var renderRight = Math.round((bounds.get_right() - scale9Grid.get_right()) * renderScaleX);
-													var renderBottom = Math.round((bounds.get_bottom() - scale9Grid.get_bottom()) * renderScaleY);
-													var renderCenterWidth = Math.round(width * renderScaleX) - renderLeft - renderRight;
-													var renderCenterHeight = Math.round(height * renderScaleY) - renderTop - renderBottom;
+													var renderLeft = Math.round(left / pixelRatio);
+													var renderTop = Math.round(top / pixelRatio);
+													var renderRight = Math.round(right / pixelRatio);
+													var renderBottom = Math.round(bottom / pixelRatio);
+													var renderCenterWidth = bounds.width * renderScaleX - renderLeft - renderRight;
+													var renderCenterHeight = bounds.height * renderScaleY - renderTop - renderBottom;
 													renderer.applySmoothing(context,false);
 													if(centerWidth != 0 && centerHeight != 0) {
 														context.drawImage(canvas,0,0,left,top,0,0,renderLeft,renderTop);
@@ -99105,11 +99242,7 @@ openfl_display__$internal_CanvasTextField.renderDrawable = function(textField,re
 														context.drawImage(canvas,left + centerWidth,0,right,height,renderLeft + renderCenterWidth,0,renderRight,renderHeight);
 													}
 												} else {
-													var matrix = openfl_geom_Matrix.__pool.get();
-													matrix.scale(1 / graphics.__bitmapScale,1 / graphics.__bitmapScale);
-													matrix.concat(transform);
 													renderer.setTransform(transform,context);
-													openfl_geom_Matrix.__pool.release(matrix);
 													context.drawImage(canvas,0,0,width,height);
 												}
 												renderer.__popMaskObject(textField);
@@ -99302,23 +99435,28 @@ openfl_display__$internal_CanvasTilemap.renderDrawable = function(tilemap,render
 											renderer.__pushMaskObject(tilemap);
 											context.globalAlpha = alpha;
 											if(scale9Grid != null && transform.b == 0 && transform.c == 0) {
+												var pixelRatio = renderer.__pixelRatio;
+												var matrix = openfl_geom_Matrix.__pool.get();
+												matrix.translate(transform.tx,transform.ty);
+												renderer.setTransform(matrix,context);
+												openfl_geom_Matrix.__pool.release(matrix);
 												var bounds = graphics.__bounds;
 												var scaleX = graphics.__renderTransform.a / graphics.__bitmapScale;
 												var scaleY = graphics.__renderTransform.d / graphics.__bitmapScale;
-												var renderScaleX = transform.a;
-												var renderScaleY = transform.d;
+												var renderScaleX = scaleX * transform.a;
+												var renderScaleY = scaleY * transform.d;
 												var left = Math.max(1,Math.round(scale9Grid.x * scaleX));
 												var top = Math.round(scale9Grid.y * scaleY);
 												var right = Math.max(1,Math.round((bounds.get_right() - scale9Grid.get_right()) * scaleX));
 												var bottom = Math.round((bounds.get_bottom() - scale9Grid.get_bottom()) * scaleY);
 												var centerWidth = Math.round(scale9Grid.width * scaleX);
 												var centerHeight = Math.round(scale9Grid.height * scaleY);
-												var renderLeft = Math.round(scale9Grid.x * renderScaleX);
-												var renderTop = Math.round(scale9Grid.y * renderScaleY);
-												var renderRight = Math.round((bounds.get_right() - scale9Grid.get_right()) * renderScaleX);
-												var renderBottom = Math.round((bounds.get_bottom() - scale9Grid.get_bottom()) * renderScaleY);
-												var renderCenterWidth = Math.round(width * renderScaleX) - renderLeft - renderRight;
-												var renderCenterHeight = Math.round(height * renderScaleY) - renderTop - renderBottom;
+												var renderLeft = Math.round(left / pixelRatio);
+												var renderTop = Math.round(top / pixelRatio);
+												var renderRight = Math.round(right / pixelRatio);
+												var renderBottom = Math.round(bottom / pixelRatio);
+												var renderCenterWidth = bounds.width * renderScaleX - renderLeft - renderRight;
+												var renderCenterHeight = bounds.height * renderScaleY - renderTop - renderBottom;
 												renderer.applySmoothing(context,false);
 												if(centerWidth != 0 && centerHeight != 0) {
 													context.drawImage(canvas,0,0,left,top,0,0,renderLeft,renderTop);
@@ -99342,11 +99480,7 @@ openfl_display__$internal_CanvasTilemap.renderDrawable = function(tilemap,render
 													context.drawImage(canvas,left + centerWidth,0,right,height,renderLeft + renderCenterWidth,0,renderRight,renderHeight);
 												}
 											} else {
-												var matrix = openfl_geom_Matrix.__pool.get();
-												matrix.scale(1 / graphics.__bitmapScale,1 / graphics.__bitmapScale);
-												matrix.concat(transform);
 												renderer.setTransform(transform,context);
-												openfl_geom_Matrix.__pool.release(matrix);
 												context.drawImage(canvas,0,0,width,height);
 											}
 											renderer.__popMaskObject(tilemap);
@@ -101330,7 +101464,8 @@ openfl_display__$internal_Context3DGraphics.render = function(graphics,renderer)
 		renderer.__softwareRenderer.__worldTransform = cacheTransform;
 	} else {
 		graphics.__bitmap = null;
-		graphics.__update(renderer.__worldTransform);
+		var pixelRatio = renderer.__pixelRatio;
+		graphics.__update(renderer.__worldTransform,pixelRatio);
 		var bounds = graphics.__bounds;
 		var width = graphics.__width;
 		var height = graphics.__height;
@@ -102642,9 +102777,9 @@ openfl_display__$internal_Context3DTextField.render = function(textField,rendere
 		}
 		graphics.__bounds.copyFrom(bounds);
 	}
-	graphics.__update(renderer1.__worldTransform);
+	var pixelRatio = renderer1.__pixelRatio;
+	graphics.__update(renderer1.__worldTransform,pixelRatio);
 	if(textField.__dirty || graphics.__softwareDirty) {
-		var pixelRatio = renderer1.__pixelRatio;
 		var width = Math.round(graphics.__width * pixelRatio);
 		var height = Math.round(graphics.__height * pixelRatio);
 		if((textEngine.text == null || textEngine.text == "") && !textEngine.background && !textEngine.border && !textEngine.__hasFocus && (textEngine.type != 1 || !textEngine.selectable) || (textEngine.width <= 0 || textEngine.height <= 0) && textEngine.autoSize != 2) {
@@ -102782,8 +102917,9 @@ openfl_display__$internal_Context3DTextField.render = function(textField,rendere
 						openfl_display__$internal_CanvasTextField.context.beginPath();
 						openfl_display__$internal_CanvasTextField.context.strokeStyle = color;
 						openfl_display__$internal_CanvasTextField.context.lineWidth = 1;
+						var descent = Math.floor(group1.ascent * 0.185);
 						var x = group1.offsetX + scrollX - bounds.x;
-						var y = Math.ceil(group1.offsetY + scrollY + group1.ascent - bounds.y) + 0.5;
+						var y = Math.ceil(group1.offsetY + scrollY + group1.ascent - bounds.y) + descent + 0.5;
 						openfl_display__$internal_CanvasTextField.context.moveTo(x,y);
 						openfl_display__$internal_CanvasTextField.context.lineTo(x + group1.width,y);
 						openfl_display__$internal_CanvasTextField.context.stroke();
@@ -102921,9 +103057,9 @@ openfl_display__$internal_Context3DTextField.renderMask = function(textField,ren
 		}
 		graphics.__bounds.copyFrom(bounds);
 	}
-	graphics.__update(renderer1.__worldTransform);
+	var pixelRatio = renderer1.__pixelRatio;
+	graphics.__update(renderer1.__worldTransform,pixelRatio);
 	if(textField.__dirty || graphics.__softwareDirty) {
-		var pixelRatio = renderer1.__pixelRatio;
 		var width = Math.round(graphics.__width * pixelRatio);
 		var height = Math.round(graphics.__height * pixelRatio);
 		if((textEngine.text == null || textEngine.text == "") && !textEngine.background && !textEngine.border && !textEngine.__hasFocus && (textEngine.type != 1 || !textEngine.selectable) || (textEngine.width <= 0 || textEngine.height <= 0) && textEngine.autoSize != 2) {
@@ -103061,8 +103197,9 @@ openfl_display__$internal_Context3DTextField.renderMask = function(textField,ren
 						openfl_display__$internal_CanvasTextField.context.beginPath();
 						openfl_display__$internal_CanvasTextField.context.strokeStyle = color;
 						openfl_display__$internal_CanvasTextField.context.lineWidth = 1;
+						var descent = Math.floor(group1.ascent * 0.185);
 						var x = group1.offsetX + scrollX - bounds.x;
-						var y = Math.ceil(group1.offsetY + scrollY + group1.ascent - bounds.y) + 0.5;
+						var y = Math.ceil(group1.offsetY + scrollY + group1.ascent - bounds.y) + descent + 0.5;
 						openfl_display__$internal_CanvasTextField.context.moveTo(x,y);
 						openfl_display__$internal_CanvasTextField.context.lineTo(x + group1.width,y);
 						openfl_display__$internal_CanvasTextField.context.stroke();
@@ -104474,23 +104611,28 @@ openfl_display__$internal_DOMTilemap.render = function(tilemap,renderer) {
 											renderer1.__pushMaskObject(tilemap);
 											context.globalAlpha = alpha;
 											if(scale9Grid != null && transform.b == 0 && transform.c == 0) {
+												var pixelRatio = renderer1.__pixelRatio;
+												var matrix = openfl_geom_Matrix.__pool.get();
+												matrix.translate(transform.tx,transform.ty);
+												renderer1.setTransform(matrix,context);
+												openfl_geom_Matrix.__pool.release(matrix);
 												var bounds = graphics.__bounds;
 												var scaleX = graphics.__renderTransform.a / graphics.__bitmapScale;
 												var scaleY = graphics.__renderTransform.d / graphics.__bitmapScale;
-												var renderScaleX = transform.a;
-												var renderScaleY = transform.d;
+												var renderScaleX = scaleX * transform.a;
+												var renderScaleY = scaleY * transform.d;
 												var left = Math.max(1,Math.round(scale9Grid.x * scaleX));
 												var top = Math.round(scale9Grid.y * scaleY);
 												var right = Math.max(1,Math.round((bounds.get_right() - scale9Grid.get_right()) * scaleX));
 												var bottom = Math.round((bounds.get_bottom() - scale9Grid.get_bottom()) * scaleY);
 												var centerWidth = Math.round(scale9Grid.width * scaleX);
 												var centerHeight = Math.round(scale9Grid.height * scaleY);
-												var renderLeft = Math.round(scale9Grid.x * renderScaleX);
-												var renderTop = Math.round(scale9Grid.y * renderScaleY);
-												var renderRight = Math.round((bounds.get_right() - scale9Grid.get_right()) * renderScaleX);
-												var renderBottom = Math.round((bounds.get_bottom() - scale9Grid.get_bottom()) * renderScaleY);
-												var renderCenterWidth = Math.round(width * renderScaleX) - renderLeft - renderRight;
-												var renderCenterHeight = Math.round(height * renderScaleY) - renderTop - renderBottom;
+												var renderLeft = Math.round(left / pixelRatio);
+												var renderTop = Math.round(top / pixelRatio);
+												var renderRight = Math.round(right / pixelRatio);
+												var renderBottom = Math.round(bottom / pixelRatio);
+												var renderCenterWidth = bounds.width * renderScaleX - renderLeft - renderRight;
+												var renderCenterHeight = bounds.height * renderScaleY - renderTop - renderBottom;
 												renderer1.applySmoothing(context,false);
 												if(centerWidth != 0 && centerHeight != 0) {
 													context.drawImage(canvas,0,0,left,top,0,0,renderLeft,renderTop);
@@ -104514,11 +104656,7 @@ openfl_display__$internal_DOMTilemap.render = function(tilemap,renderer) {
 													context.drawImage(canvas,left + centerWidth,0,right,height,renderLeft + renderCenterWidth,0,renderRight,renderHeight);
 												}
 											} else {
-												var matrix = openfl_geom_Matrix.__pool.get();
-												matrix.scale(1 / graphics.__bitmapScale,1 / graphics.__bitmapScale);
-												matrix.concat(transform);
 												renderer1.setTransform(transform,context);
-												openfl_geom_Matrix.__pool.release(matrix);
 												context.drawImage(canvas,0,0,width,height);
 											}
 											renderer1.__popMaskObject(tilemap);
@@ -104629,23 +104767,28 @@ openfl_display__$internal_DOMTilemap.renderDrawable = function(tilemap,renderer)
 											renderer1.__pushMaskObject(tilemap);
 											context.globalAlpha = alpha;
 											if(scale9Grid != null && transform.b == 0 && transform.c == 0) {
+												var pixelRatio = renderer1.__pixelRatio;
+												var matrix = openfl_geom_Matrix.__pool.get();
+												matrix.translate(transform.tx,transform.ty);
+												renderer1.setTransform(matrix,context);
+												openfl_geom_Matrix.__pool.release(matrix);
 												var bounds = graphics.__bounds;
 												var scaleX = graphics.__renderTransform.a / graphics.__bitmapScale;
 												var scaleY = graphics.__renderTransform.d / graphics.__bitmapScale;
-												var renderScaleX = transform.a;
-												var renderScaleY = transform.d;
+												var renderScaleX = scaleX * transform.a;
+												var renderScaleY = scaleY * transform.d;
 												var left = Math.max(1,Math.round(scale9Grid.x * scaleX));
 												var top = Math.round(scale9Grid.y * scaleY);
 												var right = Math.max(1,Math.round((bounds.get_right() - scale9Grid.get_right()) * scaleX));
 												var bottom = Math.round((bounds.get_bottom() - scale9Grid.get_bottom()) * scaleY);
 												var centerWidth = Math.round(scale9Grid.width * scaleX);
 												var centerHeight = Math.round(scale9Grid.height * scaleY);
-												var renderLeft = Math.round(scale9Grid.x * renderScaleX);
-												var renderTop = Math.round(scale9Grid.y * renderScaleY);
-												var renderRight = Math.round((bounds.get_right() - scale9Grid.get_right()) * renderScaleX);
-												var renderBottom = Math.round((bounds.get_bottom() - scale9Grid.get_bottom()) * renderScaleY);
-												var renderCenterWidth = Math.round(width * renderScaleX) - renderLeft - renderRight;
-												var renderCenterHeight = Math.round(height * renderScaleY) - renderTop - renderBottom;
+												var renderLeft = Math.round(left / pixelRatio);
+												var renderTop = Math.round(top / pixelRatio);
+												var renderRight = Math.round(right / pixelRatio);
+												var renderBottom = Math.round(bottom / pixelRatio);
+												var renderCenterWidth = bounds.width * renderScaleX - renderLeft - renderRight;
+												var renderCenterHeight = bounds.height * renderScaleY - renderTop - renderBottom;
 												renderer1.applySmoothing(context,false);
 												if(centerWidth != 0 && centerHeight != 0) {
 													context.drawImage(canvas,0,0,left,top,0,0,renderLeft,renderTop);
@@ -104669,11 +104812,7 @@ openfl_display__$internal_DOMTilemap.renderDrawable = function(tilemap,renderer)
 													context.drawImage(canvas,left + centerWidth,0,right,height,renderLeft + renderCenterWidth,0,renderRight,renderHeight);
 												}
 											} else {
-												var matrix = openfl_geom_Matrix.__pool.get();
-												matrix.scale(1 / graphics.__bitmapScale,1 / graphics.__bitmapScale);
-												matrix.concat(transform);
 												renderer1.setTransform(transform,context);
-												openfl_geom_Matrix.__pool.release(matrix);
 												context.drawImage(canvas,0,0,width,height);
 											}
 											renderer1.__popMaskObject(tilemap);
@@ -108152,7 +108291,7 @@ openfl_display3D_Context3D.prototype = $extend(openfl_events_EventDispatcher.pro
 			var dest = isVertex ? this.__vertexConstants : this.__fragmentConstants;
 			var bytes = openfl_utils_ByteArray.toBytes(data);
 			var byteOffset = 0;
-			var len = openfl_utils_ByteArray.get_length(data);
+			var len = null;
 			if(byteOffset == null) {
 				byteOffset = 0;
 			}
@@ -108616,6 +108755,12 @@ openfl_display3D_Context3D.prototype = $extend(openfl_events_EventDispatcher.pro
 			var scissorY = this.__state.scissorRectangle.y | 0;
 			var scissorWidth = this.__state.scissorRectangle.width | 0;
 			var scissorHeight = this.__state.scissorRectangle.height | 0;
+			if(this.__backBufferWantsBestResolution) {
+				scissorX = this.__state.scissorRectangle.x * this.__stage.window.__scale | 0;
+				scissorY = this.__state.scissorRectangle.y * this.__stage.window.__scale | 0;
+				scissorWidth = this.__state.scissorRectangle.width * this.__stage.window.__scale | 0;
+				scissorHeight = this.__state.scissorRectangle.height * this.__stage.window.__scale | 0;
+			}
 			if(this.__state.renderToTexture == null && this.__stage3D == null) {
 				var contextHeight = this.__stage.window.__height * this.__stage.window.__scale | 0;
 				scissorY = contextHeight - (this.__state.scissorRectangle.height | 0) - scissorY;
@@ -117561,6 +117706,9 @@ openfl_text_TextField.prototype = $extend(openfl_display_InteractiveObject.proto
 		} else if(lineIndex + 1 > this.get_bottomScrollV()) {
 			var i = lineIndex;
 			var tempHeight = 0.0;
+			if(i >= this.__textEngine.lineHeights.get_length()) {
+				i = this.__textEngine.lineHeights.get_length() - 1;
+			}
 			while(i >= 0) {
 				tempHeight += this.__textEngine.lineHeights.get(i);
 				if(tempHeight > this.get_height() - 4) {
@@ -118025,6 +118173,7 @@ openfl_text_TextField.prototype = $extend(openfl_display_InteractiveObject.proto
 			value = 0;
 		}
 		if(value != this.__textEngine.type) {
+			this.__textEngine.type = value;
 			if(value == 1) {
 				this.addEventListener("addedToStage",$bind(this,this.this_onAddedToStage));
 				this.this_onFocusIn(null);
@@ -118041,7 +118190,7 @@ openfl_text_TextField.prototype = $extend(openfl_display_InteractiveObject.proto
 				this.__setParentRenderDirty();
 			}
 		}
-		return this.__textEngine.type = value;
+		return this.__textEngine.type;
 	}
 	,get_width: function() {
 		this.__updateLayout();
@@ -118161,15 +118310,7 @@ openfl_text_TextField.prototype = $extend(openfl_display_InteractiveObject.proto
 	}
 	,this_onFocusOut: function(event) {
 		this.__stopCursorTimer();
-		if(event.relatedObject == null || !((event.relatedObject) instanceof openfl_text_TextField)) {
-			this.__stopTextInput();
-		} else {
-			if(this.stage != null) {
-				this.stage.window.onTextInput.remove($bind(this,this.window_onTextInput));
-				this.stage.window.onKeyDown.remove($bind(this,this.window_onKeyDown));
-			}
-			this.__inputEnabled = false;
-		}
+		this.__stopTextInput();
 		if(this.__selectionIndex != this.__caretIndex) {
 			this.__selectionIndex = this.__caretIndex;
 			this.__dirty = true;
@@ -122594,10 +122735,11 @@ openfl_utils_Assets.initBinding = function(className,instance) {
 				instance.__bind(library,className);
 			};
 		} else {
+			openfl_display_Sprite.__constructor = null;
 			instance.__bind(library,className);
 		}
 	} else {
-		lime_utils_Log.warn("No asset is registered as \"" + className + "\"",{ fileName : "openfl/utils/Assets.hx", lineNumber : 366, className : "openfl.utils.Assets", methodName : "initBinding"});
+		lime_utils_Log.warn("No asset is registered as \"" + className + "\"",{ fileName : "openfl/utils/Assets.hx", lineNumber : 367, className : "openfl.utils.Assets", methodName : "initBinding"});
 	}
 };
 openfl_utils_Assets.isLocal = function(id,type,useCache) {
@@ -124041,6 +124183,7 @@ flixel_FlxObject._secondSeparateFlxRect = (function($this) {
 	return $r;
 }(this));
 flixel_FlxSprite.defaultAntialiasing = false;
+Player.SPEED = 100;
 Xml.Element = 0;
 Xml.PCData = 1;
 Xml.CData = 2;
@@ -124120,7 +124263,7 @@ flixel_FlxG.autoPause = true;
 flixel_FlxG.fixedTimestep = true;
 flixel_FlxG.timeScale = 1;
 flixel_FlxG.worldDivisions = 6;
-flixel_FlxG.VERSION = new flixel_system_FlxVersion(5,2,1);
+flixel_FlxG.VERSION = new flixel_system_FlxVersion(5,2,2);
 flixel_FlxG.elapsed = 0;
 flixel_FlxG.maxElapsed = 0.1;
 flixel_FlxG.scaleMode = new flixel_system_scaleModes_RatioScaleMode();

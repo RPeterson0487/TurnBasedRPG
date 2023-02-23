@@ -56,6 +56,14 @@ class Player extends FlxSprite
 				newAngle = 180;
 			else if (right)
 				newAngle = 0;
+
+			velocity.setPolarDegrees(SPEED, newAngle);
 		}
+	}
+
+	override function update(elapsed:Float)
+	{
+		updateMovement();
+		super.update(elapsed);
 	}
 }
