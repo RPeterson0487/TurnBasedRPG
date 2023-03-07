@@ -2,7 +2,6 @@ package;
 
 import flixel.FlxG;
 import flixel.FlxSprite;
-import flixel.util.FlxColor;
 
 class Player extends FlxSprite
 {
@@ -25,6 +24,9 @@ class Player extends FlxSprite
 		animation.add("u_walk", [6, 7, 6, 8], 6);
 
 		drag.x = drag.y = 800;
+
+		setSize(8, 8);
+		offset.set(4, 4);
 	}
 
 	function updateMovement()
