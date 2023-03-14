@@ -34,7 +34,10 @@
         {"name": "coin", "id": 17, "_eid": "80717370", "x": 336, "y": 288, "originX": 0, "originY": 0},
         {"name": "coin", "id": 18, "_eid": "80717370", "x": 352, "y": 304, "originX": 0, "originY": 0},
         {"name": "coin", "id": 19, "_eid": "80717370", "x": 368, "y": 288, "originX": 0, "originY": 0},
-        {"name": "coin", "id": 20, "_eid": "80717370", "x": 384, "y": 304, "originX": 0, "originY": 0}
+        {"name": "coin", "id": 20, "_eid": "80717370", "x": 384, "y": 304, "originX": 0, "originY": 0},
+        {"name": "enemy", "id": 21, "_eid": "80957382", "x": 352, "y": 112, "originX": 0, "originY": 0},
+        {"name": "enemy", "id": 22, "_eid": "80957382", "x": 320, "y": 208, "originX": 0, "originY": 0},
+        {"name": "boss", "id": 23, "_eid": "80952752", "x": 352, "y": 288, "originX": 0, "originY": 0}
       ]
     },
     {

@@ -12,6 +12,7 @@ class PlayState extends FlxState
 	var map:FlxOgmo3Loader;
 	var walls:FlxTilemap;
 	var coins:FlxTypedGroup<Coin>;
+	var enemies:FlxTypedGroup<Enemy>;
 
 	override public function create()
 	{
@@ -24,6 +25,9 @@ class PlayState extends FlxState
 
 		coins = new FlxTypedGroup<Coin>();
 		add(coins);
+
+		enemies = new FlxTypedGroup<Enemy>();
+		add(enemies);
 
 		player = new Player();
 		map.loadEntities(placeEntities, "entities");
@@ -41,17 +45,29 @@ class PlayState extends FlxState
 		FlxG.collide(player, walls);
 
 		FlxG.overlap(player, coins, playerTouchCoin);
+
+		FlxG.collide(enemies, walls);
+		enemies.forEachAlive(checkEnemyVision);
 	}
 
 	function placeEntities(entity:EntityData)
 	{
-		if (entity.name == "player")
+		var x = entity.x;
+		var y = entity.y;
+
+		switch (entity.name)
 		{
-			player.setPosition(entity.x, entity.y);
-		}
-		else if (entity.name == "coin")
-		{
-			coins.add(new Coin(entity.x + 4, entity.y + 4));
+			case "player":
+				player.setPosition(x, y);
+
+			case "coin":
+				coins.add(new Coin(x + 4, y + 4));
+
+			case "enemy":
+				enemies.add(new Enemy(x + 4, y, REGULAR));
+
+			case "boss":
+				enemies.add(new Enemy(x + 4, y, BOSS));
 		}
 	}
 
@@ -60,6 +76,19 @@ class PlayState extends FlxState
 		if (player.alive && player.exists && coin.alive && coin.exists)
 		{
 			coin.kill();
+		}
+	}
+
+	function checkEnemyVision(enemy:Enemy)
+	{
+		if (walls.ray(enemy.getMidpoint(), player.getMidpoint()))
+		{
+			enemy.seesPlayer = true;
+			enemy.playerPosition = player.getMidpoint();
+		}
+		else
+		{
+			enemy.seesPlayer = false;
 		}
 	}
 }
