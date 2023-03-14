@@ -15,7 +15,26 @@
       "gridCellsX": 40,
       "gridCellsY": 30,
       "entities": [
-        {"name": "player", "id": 0, "_eid": "22568177", "x": 176, "y": 144, "originX": 0, "originY": 0}
+        {"name": "player", "id": 0, "_eid": "22568177", "x": 176, "y": 144, "originX": 0, "originY": 0},
+        {"name": "coin", "id": 1, "_eid": "80717370", "x": 240, "y": 144, "originX": 0, "originY": 0},
+        {"name": "coin", "id": 2, "_eid": "80717370", "x": 272, "y": 144, "originX": 0, "originY": 0},
+        {"name": "coin", "id": 4, "_eid": "80717370", "x": 304, "y": 144, "originX": 0, "originY": 0},
+        {"name": "coin", "id": 5, "_eid": "80717370", "x": 336, "y": 144, "originX": 0, "originY": 0},
+        {"name": "coin", "id": 6, "_eid": "80717370", "x": 368, "y": 96, "originX": 0, "originY": 0},
+        {"name": "coin", "id": 7, "_eid": "80717370", "x": 400, "y": 80, "originX": 0, "originY": 0},
+        {"name": "coin", "id": 8, "_eid": "80717370", "x": 352, "y": 160, "originX": 0, "originY": 0},
+        {"name": "coin", "id": 9, "_eid": "80717370", "x": 352, "y": 192, "originX": 0, "originY": 0},
+        {"name": "coin", "id": 10, "_eid": "80717370", "x": 352, "y": 224, "originX": 0, "originY": 0},
+        {"name": "coin", "id": 11, "_eid": "80717370", "x": 352, "y": 256, "originX": 0, "originY": 0},
+        {"name": "coin", "id": 12, "_eid": "80717370", "x": 256, "y": 192, "originX": 0, "originY": 0},
+        {"name": "coin", "id": 13, "_eid": "80717370", "x": 304, "y": 192, "originX": 0, "originY": 0},
+        {"name": "coin", "id": 14, "_eid": "80717370", "x": 256, "y": 224, "originX": 0, "originY": 0},
+        {"name": "coin", "id": 15, "_eid": "80717370", "x": 304, "y": 224, "originX": 0, "originY": 0},
+        {"name": "coin", "id": 16, "_eid": "80717370", "x": 320, "y": 304, "originX": 0, "originY": 0},
+        {"name": "coin", "id": 17, "_eid": "80717370", "x": 336, "y": 288, "originX": 0, "originY": 0},
+        {"name": "coin", "id": 18, "_eid": "80717370", "x": 352, "y": 304, "originX": 0, "originY": 0},
+        {"name": "coin", "id": 19, "_eid": "80717370", "x": 368, "y": 288, "originX": 0, "originY": 0},
+        {"name": "coin", "id": 20, "_eid": "80717370", "x": 384, "y": 304, "originX": 0, "originY": 0}
       ]
     },
     {
