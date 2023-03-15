@@ -1,5 +1,6 @@
 package;
 
+import flixel.util.FlxColor;
 import flixel.group.FlxGroup.FlxTypedGroup;
 import flixel.FlxG;
 import flixel.tile.FlxTilemap;
@@ -20,6 +21,8 @@ class PlayState extends FlxState
 	var health:Int = 3;
 	var inCombat:Bool = false;
 	var combatHud:CombatHUD;
+	var ending:Bool;
+	var won:Bool;
 
 	override public function create()
 	{
@@ -55,23 +58,42 @@ class PlayState extends FlxState
 	{
 		super.update(elapsed);
 
+		if (ending)
+		{
+			return;
+		}
+
 		if (inCombat)
 		{
 			if (!combatHud.visible)
 			{
 				health = combatHud.playerHealth;
 				hud.updateHUD(health, money);
-				if (combatHud.outcome == VICTORY)
+				if (combatHud.outcome == DEFEAT)
 				{
-					combatHud.enemy.kill();
+					ending = true;
+					FlxG.camera.fade(FlxColor.BLACK, 0.33, false, doneFadeOut);
 				}
 				else
 				{
-					combatHud.enemy.flicker();
+					if (combatHud.outcome == VICTORY)
+					{
+						combatHud.enemy.kill();
+						if (combatHud.enemy.type == BOSS)
+						{
+							won = true;
+							ending = true;
+							FlxG.camera.fade(FlxColor.BLACK, 0.33, false, doneFadeOut);
+						}
+					}
+					else
+					{
+						combatHud.enemy.flicker();
+					}
+					inCombat = false;
+					player.active = true;
+					enemies.active = true;
 				}
-				inCombat = false;
-				player.active = true;
-				enemies.active = true;
 			}
 		}
 		else
@@ -142,5 +164,10 @@ class PlayState extends FlxState
 		player.active = false;
 		enemies.active = false;
 		combatHud.initCombat(health, enemy);
+	}
+
+	function doneFadeOut()
+	{
+		FlxG.switchState(new GameOverState(won, money));
 	}
 }
