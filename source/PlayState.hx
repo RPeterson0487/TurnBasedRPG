@@ -6,6 +6,8 @@ import flixel.tile.FlxTilemap;
 import flixel.addons.editors.ogmo.FlxOgmo3Loader;
 import flixel.FlxState;
 
+using flixel.util.FlxSpriteUtil;
+
 class PlayState extends FlxState
 {
 	var player:Player;
@@ -13,6 +15,11 @@ class PlayState extends FlxState
 	var walls:FlxTilemap;
 	var coins:FlxTypedGroup<Coin>;
 	var enemies:FlxTypedGroup<Enemy>;
+	var hud:HUD;
+	var money:Int = 0;
+	var health:Int = 3;
+	var inCombat:Bool = false;
+	var combatHud:CombatHUD;
 
 	override public function create()
 	{
@@ -35,6 +42,12 @@ class PlayState extends FlxState
 
 		FlxG.camera.follow(player, TOPDOWN, 1);
 
+		hud = new HUD();
+		add(hud);
+
+		combatHud = new CombatHUD();
+		add(combatHud);
+
 		super.create();
 	}
 
@@ -42,12 +55,33 @@ class PlayState extends FlxState
 	{
 		super.update(elapsed);
 
-		FlxG.collide(player, walls);
-
-		FlxG.overlap(player, coins, playerTouchCoin);
-
-		FlxG.collide(enemies, walls);
-		enemies.forEachAlive(checkEnemyVision);
+		if (inCombat)
+		{
+			if (!combatHud.visible)
+			{
+				health = combatHud.playerHealth;
+				hud.updateHUD(health, money);
+				if (combatHud.outcome == VICTORY)
+				{
+					combatHud.enemy.kill();
+				}
+				else
+				{
+					combatHud.enemy.flicker();
+				}
+				inCombat = false;
+				player.active = true;
+				enemies.active = true;
+			}
+		}
+		else
+		{
+			FlxG.collide(player, walls);
+			FlxG.overlap(player, coins, playerTouchCoin);
+			FlxG.collide(enemies, walls);
+			enemies.forEachAlive(checkEnemyVision);
+			FlxG.overlap(player, enemies, playerTouchEnemy);
+		}
 	}
 
 	function placeEntities(entity:EntityData)
@@ -76,6 +110,8 @@ class PlayState extends FlxState
 		if (player.alive && player.exists && coin.alive && coin.exists)
 		{
 			coin.kill();
+			money++;
+			hud.updateHUD(health, money);
 		}
 	}
 
@@ -90,5 +126,21 @@ class PlayState extends FlxState
 		{
 			enemy.seesPlayer = false;
 		}
+	}
+
+	function playerTouchEnemy(player:Player, enemy:Enemy)
+	{
+		if (player.alive && player.exists && enemy.alive && enemy.exists && !enemy.isFlickering())
+		{
+			startCombat(enemy);
+		}
+	}
+
+	function startCombat(enemy:Enemy)
+	{
+		inCombat = true;
+		player.active = false;
+		enemies.active = false;
+		combatHud.initCombat(health, enemy);
 	}
 }
