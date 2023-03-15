@@ -1,5 +1,6 @@
 package;
 
+import flixel.system.FlxSound;
 import flixel.math.FlxVelocity;
 import flixel.FlxG;
 import flixel.math.FlxPoint;
@@ -26,6 +27,7 @@ class Enemy extends FlxSprite
 	var brain:FSM;
 	var idleTimer:Float;
 	var moveDirection:Float;
+	var stepSound:FlxSound;
 
 	public function new(x:Float, y:Float, type:EnemyType)
 	{
@@ -46,6 +48,9 @@ class Enemy extends FlxSprite
 		offset.x = 4;
 		offset.y = 8;
 
+		stepSound = FlxG.sound.load(AssetPaths.step__wav, 0.4);
+		stepSound.proximity(x, y, FlxG.camera.target, FlxG.width * 0.6);
+
 		brain = new FSM(idle);
 		idleTimer = 0;
 		playerPosition = FlxPoint.get();
@@ -60,6 +65,7 @@ class Enemy extends FlxSprite
 
 		if (velocity.x != 0 || velocity.y != 0)
 		{
+			action = "walk";
 			if (Math.abs(velocity.x) > Math.abs(velocity.y))
 			{
 				if (velocity.x < 0)
@@ -74,6 +80,9 @@ class Enemy extends FlxSprite
 				else
 					facing = DOWN;
 			}
+
+			stepSound.setPosition(x + frameWidth / 2, y + height);
+			stepSound.play();
 		}
 
 		switch (facing)

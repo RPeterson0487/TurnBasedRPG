@@ -1,5 +1,6 @@
 package;
 
+import flixel.system.FlxSound;
 import flixel.util.FlxColor;
 import flixel.group.FlxGroup.FlxTypedGroup;
 import flixel.FlxG;
@@ -23,6 +24,7 @@ class PlayState extends FlxState
 	var combatHud:CombatHUD;
 	var ending:Bool;
 	var won:Bool;
+	var coinSound:FlxSound;
 
 	override public function create()
 	{
@@ -34,6 +36,7 @@ class PlayState extends FlxState
 		add(walls);
 
 		coins = new FlxTypedGroup<Coin>();
+		coinSound = FlxG.sound.load(AssetPaths.coin__wav);
 		add(coins);
 
 		enemies = new FlxTypedGroup<Enemy>();
@@ -133,6 +136,7 @@ class PlayState extends FlxState
 		{
 			coin.kill();
 			money++;
+			coinSound.play(true);
 			hud.updateHUD(health, money);
 		}
 	}

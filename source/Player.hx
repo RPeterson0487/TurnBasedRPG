@@ -1,11 +1,14 @@
 package;
 
+import flixel.system.FlxSound;
 import flixel.FlxG;
 import flixel.FlxSprite;
 
 class Player extends FlxSprite
 {
 	static inline var SPEED:Float = 100;
+
+	var stepSound:FlxSound;
 
 	public function new(x:Float = 0, y:Float = 0)
 	{
@@ -27,6 +30,8 @@ class Player extends FlxSprite
 
 		setSize(8, 8);
 		offset.set(4, 4);
+
+		stepSound = FlxG.sound.load(AssetPaths.step__wav);
 	}
 
 	function updateMovement()
@@ -86,6 +91,7 @@ class Player extends FlxSprite
 		if ((velocity.x != 0 || velocity.y != 0) && touching == NONE)
 		{
 			action = "walk";
+			stepSound.play();
 		}
 
 		switch (facing)
