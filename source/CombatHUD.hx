@@ -8,7 +8,6 @@ import hscript.Checker;
 import openfl.geom.Point;
 import hscript.Checker.Completion;
 import haxe.crypto.Sha1;
-import js.html.AddEventListenerOptions;
 import flixel.addons.effects.chainable.FlxEffectSprite;
 import flixel.addons.effects.chainable.FlxWaveEffect;
 import flixel.util.FlxColor;
